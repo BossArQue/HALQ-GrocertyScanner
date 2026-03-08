@@ -229,10 +229,22 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
     <div class="pcsub">Is this the right item and price?</div>
     <div style="font-size:11px;color:var(--muted);font-family:monospace;margin-bottom:12px;" id="mVCode"></div>
     <div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px;">
-      <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Product</div>
-      <div style="font-weight:600;font-size:16px;margin-bottom:12px;" id="mVName"></div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Price</div>
-      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:26px;color:var(--accent);" id="mVPrice"></div>
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Product</div>
+          <div style="font-weight:600;font-size:16px;margin-bottom:12px;line-height:1.3;" id="mVName"></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px;">Price each</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:26px;color:var(--accent);" id="mVPrice"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:12px;min-width:72px;">
+          <div style="font-size:11px;color:var(--muted);text-align:center;">Qty</div>
+          <button class="qb" onclick="vQty(1)" style="width:36px;height:36px;font-size:20px;">+</button>
+          <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:24px;color:var(--text);min-width:32px;text-align:center;" id="mVQty">1</div>
+          <button class="qb" onclick="vQty(-1)" style="width:36px;height:36px;font-size:20px;">−</button>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">Total</div>
+          <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:var(--accent2);text-align:center;" id="mVTotal">₱0</div>
+        </div>
+      </div>
     </div>
     <div class="copts">
       <div class="copt cg" onclick="doVerify('add')"><div class="copt-icon">🛒</div><div><div class="copt-title">Yes, Add to Cart</div><div class="copt-desc">Looks correct</div></div></div>
@@ -523,13 +535,14 @@ function onScan(code){
   }
 }
 
-function showLastScanned(name, price, code){
+function showLastScanned(name, price, code, qty){
+  qty = qty || 1;
   document.getElementById('lastScanned').classList.remove('hidden');
   document.getElementById('lastScannedBody').innerHTML =
     '<div style="display:flex;justify-content:space-between;align-items:center;">' +
     '<div><div style="font-weight:600;font-size:15px;">'+esc(name)+'</div>' +
-    '<div style="font-size:11px;color:var(--muted);">'+esc(code)+'</div></div>' +
-    '<div style="font-family:Syne,sans-serif;font-weight:800;font-size:18px;color:var(--accent);">₱'+(+price).toFixed(2)+'</div></div>';
+    '<div style="font-size:11px;color:var(--muted);">'+esc(code)+(qty>1?' · ×'+qty:'')+'</div></div>' +
+    '<div style="font-family:Syne,sans-serif;font-weight:800;font-size:18px;color:var(--accent);">₱'+(+price*qty).toFixed(2)+'</div></div>';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -579,20 +592,27 @@ function savePM(){
 // ═══════════════════════════════════════════════════════
 //  VERIFY MODAL
 // ═══════════════════════════════════════════════════════
-var _vCode='', _vName='', _vPrice=0;
+var _vCode='', _vName='', _vPrice=0, _vQty=1;
 function openVerify(code, name, price){
-  _vCode=code; _vName=name; _vPrice=+price;
+  _vCode=code; _vName=name; _vPrice=+price; _vQty=1;
   document.getElementById('mVCode').textContent = 'Barcode: '+code;
   document.getElementById('mVName').textContent = name;
   document.getElementById('mVPrice').textContent = '₱'+price.toFixed(2);
+  document.getElementById('mVQty').textContent = '1';
+  document.getElementById('mVTotal').textContent = '₱'+price.toFixed(2);
   document.getElementById('mVerify').classList.remove('hidden');
+}
+function vQty(d){
+  _vQty = Math.max(1, _vQty + d);
+  document.getElementById('mVQty').textContent = _vQty;
+  document.getElementById('mVTotal').textContent = '₱'+(_vPrice * _vQty).toFixed(2);
 }
 function doVerify(action){
   document.getElementById('mVerify').classList.add('hidden');
   if(action==='add'){
-    addToCart(_vCode, _vName, _vPrice);
-    showLastScanned(_vName, _vPrice, _vCode);
-    toast('✓ Added: '+_vName);
+    addToCart(_vCode, _vName, _vPrice, _vQty);
+    showLastScanned(_vName, _vPrice, _vCode, _vQty);
+    toast('✓ Added '+_vQty+'× '+_vName);
   } else if(action==='edit'){
     openPM(_vCode, true, _vName, _vPrice);
   }
@@ -652,9 +672,10 @@ function toggleVerify(){ S.verifyMode = document.getElementById('verifyToggle').
 // ═══════════════════════════════════════════════════════
 //  CART
 // ═══════════════════════════════════════════════════════
-function addToCart(barcode, name, price){
+function addToCart(barcode, name, price, qty){
+  qty = qty || 1;
   var ex = S.cart.find(function(i){ return i.barcode===barcode; });
-  if(ex) ex.qty++; else S.cart.push({ barcode:barcode, name:name, price:+price, qty:1 });
+  if(ex) ex.qty += qty; else S.cart.push({ barcode:barcode, name:name, price:+price, qty:qty });
   save(); renderHome();
 }
 function cartTotal(){ return S.cart.reduce(function(s,i){ return s+i.price*i.qty; }, 0); }
